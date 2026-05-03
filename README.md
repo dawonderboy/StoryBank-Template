@@ -166,4 +166,4 @@ MIT — fork it, adapt it, make it yours.
 
 ---
 
-*Built by [Robin Letim](https://github.com/dawonderboy) · [Substack](https://yoursubstack.substack.com)*
+*Built by [Robin Letim](https://github.com/dawonderboy) · [Substack](https://dawonderboy.substack.com)*
