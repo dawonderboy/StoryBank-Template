@@ -2,7 +2,7 @@
 
 An AI-powered interview prep app you can build in a weekend and run for the cost of a Claude subscription.
 
-Built with React + TypeScript + Vite, deployed on Vercel, powered by the Anthropic API. Described in detail in [this Substack post](https://yoursubstack.substack.com/your-post).
+Built with React + TypeScript + Vite, deployed on Vercel, powered by the Anthropic API. Described in detail in [this Substack post](https://dawonderboy.substack.com/p/i-have-adhd-and-interviews-are-hard).
 
 ![Story Bank](https://img.shields.io/badge/built%20with-Claude%20Code-black?style=flat-square) ![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript) ![Vercel](https://img.shields.io/badge/deployed%20on-Vercel-black?style=flat-square&logo=vercel)
 
