@@ -18,7 +18,7 @@ Story Bank is a personal interview prep tool built around your own career storie
 
 **Q&A mapper** — Common behavioral interview questions, each pre-mapped to the right story and why. No blanking on which story fits which question.
 
-![Practice mode with scoring](./screenshots/practice-score.png)
+![Practice mode with scoring](./screenshots/practice-score-public.png)
 
 **Practice mode** — An AI interviewer asks the question, you answer (typed or by voice), it scores your answer on Structure, Specificity, and Conciseness (1–5 each) and fires a targeted follow-up probe. Cold open mode randomizes the question so you practice recall, not just repetition.
 
