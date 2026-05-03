@@ -42,9 +42,10 @@ Story Bank is a personal interview prep tool built around your own career storie
 |---|---|
 | Frontend | React 18 + TypeScript + Vite |
 | Styling | Inline styles with CSS variables |
-| AI coaching | Anthropic API (`claude-sonnet-4-20250514`) |
+| AI coaching | Anthropic API (`claude-sonnet-4-6`) |
 | Voice transcription | Groq Whisper (`whisper-large-v3-turbo`) |
 | Job posting fetch | Vercel serverless function (`/api/fetch-job`) |
+| API proxies | Vercel serverless functions (`/api/claude`, `/api/groq`) |
 | Deployment | Vercel |
 | Persistence | Browser localStorage |
 
@@ -53,8 +54,8 @@ Story Bank is a personal interview prep tool built around your own career storie
 ## Quick start
 
 ```bash
-git clone https://github.com/dawonderboy/StoryBank-template
-cd StoryBank-template
+git clone https://github.com/dawonderboy/StoryBank-Template
+cd StoryBank-Template
 npm install
 npm run dev
 ```
@@ -63,16 +64,19 @@ You'll need two API keys — both have free tiers:
 
 | Key | Where to get it | Used for |
 |---|---|---|
-| `VITE_ANTHROPIC_KEY` | [console.anthropic.com](https://console.anthropic.com) | AI coaching, scoring, company prep |
-| Groq key (entered in-app) | [console.groq.com](https://console.groq.com) | Voice transcription |
+| Anthropic | [console.anthropic.com](https://console.anthropic.com) | AI coaching, scoring, company prep |
+| Groq | [console.groq.com](https://console.groq.com) | Voice transcription |
 
-Add the Anthropic key to a `.env` file in the project root:
+Two ways to provide them:
 
-```
-VITE_ANTHROPIC_KEY=sk-ant-...
-```
+1. **Recommended (zero-config) — set as Vercel environment variables**
+   - `ANTHROPIC_API_KEY`
+   - `GROQ_API_KEY`
+   - The serverless functions read these on the server side, so users never enter keys in the browser.
 
-The Groq key is entered via the 🔑 icon in the app header and saved to localStorage.
+2. **Per-browser — enter in the 🔑 dialog in the app header**
+   - Stored in localStorage on that device only.
+   - Useful for local dev or if you don't want to set Vercel env vars.
 
 ---
 
@@ -120,9 +124,21 @@ npm run build
 npx vercel --prod
 ```
 
-Or connect your GitHub repo to Vercel for automatic deploys on push. Add `VITE_ANTHROPIC_KEY` as an environment variable in your Vercel project settings.
+Or connect your GitHub repo to Vercel for automatic deploys on push.
 
-The `/api/fetch-job.ts` serverless function handles job posting fetches server-side, bypassing CORS restrictions on ATS platforms. Supports Greenhouse, Lever, Workday, and Ashby out of the box.
+In your Vercel project settings, add these environment variables:
+
+| Variable | Value |
+|---|---|
+| `ANTHROPIC_API_KEY` | your Anthropic key (starts with `sk-ant-`) |
+| `GROQ_API_KEY` | your Groq key (starts with `gsk_`) |
+
+Apply each to all three environments (Production, Preview, Development).
+
+The three serverless functions in `/api/` handle:
+- `claude.ts` — proxies Anthropic API calls (avoids CORS restrictions on direct browser calls)
+- `groq.ts` — proxies Groq Whisper transcription
+- `fetch-job.ts` — fetches job postings from ATS platforms (Greenhouse, Lever, Workday, Ashby)
 
 ---
 
@@ -142,7 +158,10 @@ It runs as a full-screen web app from your home screen.
 ├── src/
 │   └── App.tsx          # entire frontend — stories, Q&A, all five tabs
 ├── api/
-│   └── fetch-job.ts     # Vercel serverless function for ATS job fetching
+│   ├── claude.ts        # Anthropic API proxy
+│   ├── groq.ts          # Groq Whisper proxy
+│   └── fetch-job.ts     # ATS job posting fetcher
+├── screenshots/         # README assets
 ├── index.html
 ├── vite.config.ts
 └── package.json
@@ -156,7 +175,7 @@ I have ADHD. Interview prep is hard when retention is unreliable, sitting down t
 
 Existing tools were too generic, too expensive, or required too much setup to actually use consistently. So I built something purpose-built for my specific stories, my specific weaknesses, and the way my brain works.
 
-Full writeup: [I Have ADHD and Interviews Are Hard. So I Built a Tool That Works With My Brain.](https://yoursubstack.substack.com/your-post)
+Full writeup: [I Have ADHD and Interviews Are Hard. So I Built a Tool That Works With My Brain.](https://dawonderboy.substack.com/p/i-have-adhd-and-interviews-are-hard)
 
 ---
 
