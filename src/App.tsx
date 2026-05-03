@@ -181,7 +181,7 @@ export default function StoryBank() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [qaOpen, setQaOpen] = useState<number | null>(null);
   const [selQ, setSelQ] = useState(0);
-  const [selS, setSelS] = useState("zoom");
+  const [selS, setSelS] = useState("example-migration");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -221,6 +221,7 @@ export default function StoryBank() {
   const [prepUrlLoading, setPrepUrlLoading] = useState(false);
   const [prepUrlErr, setPrepUrlErr] = useState("");
   const [prepLoading, setPrepLoading] = useState(false);
+  const [prepErr, setPrepErr] = useState("");
   const [prepResult, setPrepResult] = useState<PrepResult | null>(null);
 
   const chatRef = useRef<HTMLDivElement>(null);
@@ -275,14 +276,11 @@ export default function StoryBank() {
     return {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
     };
   }
 
   async function startMic() {
     setMicErr("");
-    if (!groqKey) { setMicErr("Add your Groq key first — tap 🔑 in the header."); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -314,9 +312,9 @@ export default function StoryBank() {
           formData.append("file", blob, `audio.${ext}`);
           formData.append("model", "whisper-large-v3-turbo");
           formData.append("language", "en");
-          const resp = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+          const resp = await fetch("/api/groq", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${groqKey}` },
+            headers: groqKey ? { "x-api-key": groqKey } : {},
             body: formData
           });
           const data = await resp.json();
@@ -400,11 +398,11 @@ export default function StoryBank() {
     historyRef.current = []; setMessages([]); setStarted(false); setLoading(true); resetTimer();
 
     const sys = coldOpen
-      ? `You are a senior tech hiring manager interviewing Robin Letim, Senior IT Engineer. Ask the question naturally — no preamble, no hints about which story to use. After Robin answers, give 2-3 sentences of honest coaching feedback, then ask ONE targeted follow-up.`
-      : `You are a senior tech hiring manager interviewing Robin Letim, Senior IT Engineer.\nStory: ${s.title} | S: ${s.S} | T: ${s.T} | A: ${s.A} | R: ${s.R}\nYou are asking: "${q.q}"\nOpen by asking naturally — no preamble. After Robin answers, give 2-3 sentences of coaching feedback, then ONE targeted follow-up. Be direct and IT/engineering-specific.`;
+      ? `You are a senior tech hiring manager conducting a behavioral interview. Ask the question naturally — no preamble, no hints about which story to use. After the candidate answers, give 2-3 sentences of honest coaching feedback, then ask ONE targeted follow-up.`
+      : `You are a senior tech hiring manager conducting a behavioral interview.\nStory: ${s.title} | S: ${s.S} | T: ${s.T} | A: ${s.A} | R: ${s.R}\nYou are asking: "${q.q}"\nOpen by asking naturally — no preamble. After the candidate answers, give 2-3 sentences of coaching feedback, then ONE targeted follow-up. Be direct and IT/engineering-specific.`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(),
+      const res = await fetch("/api/claude", { method: "POST", headers: apiHeaders(),
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 500, system: sys, messages: [{ role: "user", content: `[Begin. Ask me: "${q.q}"]` }] }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -430,10 +428,10 @@ export default function StoryBank() {
     setMessages(m => [...m, { who: "user" as const, text, elapsed }]);
     setLoading(true);
     const s = activeStoryRef.current; if (!s) return;
-    const sys = `You are a senior tech hiring manager interviewing Robin Letim (Senior IT Engineer).\nStory: ${s.title} | S: ${s.S} | T: ${s.T} | A: ${s.A} | R: ${s.R}\nGive 2-3 sentences of specific coaching feedback on Robin's last answer, then ask one targeted follow-up. Be direct and concrete.`;
+    const sys = `You are a senior tech hiring manager conducting a behavioral interview.\nStory: ${s.title} | S: ${s.S} | T: ${s.T} | A: ${s.A} | R: ${s.R}\nGive 2-3 sentences of specific coaching feedback on the candidate's last answer, then ask one targeted follow-up. Be direct and concrete.`;
     historyRef.current.push({ role: "user", content: text });
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(),
+      const res = await fetch("/api/claude", { method: "POST", headers: apiHeaders(),
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 500, system: sys, messages: historyRef.current.slice(-8) }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -453,7 +451,7 @@ export default function StoryBank() {
     const q = activeQRef.current, s = activeStoryRef.current;
     const sys = `You are an IT interview coach. Score this behavioral answer on three dimensions each 1-5:\n- structure: STAR clarity\n- specificity: concrete details/numbers/actions\n- conciseness: appropriate length, not rambling (target 90-120 sec spoken)\n\nAlso write ONE coaching sentence (most important thing to fix or reinforce).\nQuestion: "${q?.q || "behavioral"}"\n${s ? `Ideal story: ${s.title}` : ""}\n\nRespond ONLY with valid JSON, no markdown:\n{"structure":N,"specificity":N,"conciseness":N,"note":"..."}`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(),
+      const res = await fetch("/api/claude", { method: "POST", headers: apiHeaders(),
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 200, system: sys, messages: [{ role: "user", content: `Score: "${answerText}". JSON only.` }] }) });
       const data = await res.json();
       const parsed: Score = JSON.parse((data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim());
@@ -484,29 +482,59 @@ export default function StoryBank() {
   }
 
   async function runCompanyPrep() {
-    if (!prepCompany.trim()) return;
-    setPrepLoading(true); setPrepResult(null);
-    const sys = `You are an interview coach for Robin Letim, Senior IT Engineer. Given a target company and role, analyze Robin's story bank and return a prep plan as JSON.
+    if (!prepCompany.trim()) { setPrepErr("Please enter a company name."); return; }
+    if (!apiKey) { setPrepErr("No API key set — tap 🔑 to add your Anthropic key."); return; }
+    setPrepLoading(true); setPrepResult(null); setPrepErr("");
+    const sys = `You are an interview coach. Given a target company and role, analyze the candidate's story bank and return a prep plan as JSON.
 
-Robin's stories:
+Candidate's stories:
 ${STORY_SUMMARIES.map(s => `- id:${s.id} | ${s.emoji} ${s.title} | cat:${s.cat} | tags:${s.tags.join(", ")} | result:${s.result}`).join("\n")}
 
-Return ONLY valid JSON (no markdown):
+CRITICAL: Return ONLY a valid JSON object. No markdown, no preamble, no commentary.
+- Use double quotes for all strings
+- Escape any quotes within string values with backslash
+- Do not use single quotes inside strings — rephrase instead
+- Keep all string values to one or two sentences max
+- No trailing commas
+
+Schema:
 {
-  "stories": [{"id":"...","title":"...","emoji":"...","rank":1,"reason":"1 sentence why this story fits this company/role"},
-               ... (top 4-5 stories ranked by fit)],
-  "questions": ["5-6 specific behavioral questions this company/role is likely to ask"],
-  "gaps": "1-2 sentences on any gaps or weaknesses to prepare for given this company",
-  "opener": "1 sentence positioning advice — how Robin should frame their background for this specific role"
+  "stories": [{"id":"story-id","title":"Story Title","emoji":"🔄","rank":1,"reason":"One sentence why this fits."}],
+  "questions": ["Question one.","Question two.","Question three.","Question four.","Question five."],
+  "gaps": "One or two sentences about gaps to prepare for.",
+  "opener": "One sentence of positioning advice."
 }`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
+      const res = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 800, system: sys,
           messages: [{ role: "user", content: `Company: ${prepCompany}\nRole: ${prepTitle || "Senior IT Engineer"}\n${prepJD ? `Job description excerpt:\n${prepJD.slice(0, 1000)}` : ""}` }] }) });
       const data = await res.json();
-      const raw = (data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim();
-      setPrepResult(JSON.parse(raw));
-    } catch { setPrepResult(null); }
+      if (data.error) throw new Error(data.error.message || "API error");
+      let raw = (data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim();
+      // Extract JSON object from raw text (handles cases where Claude adds prose around it)
+      const firstBrace = raw.indexOf("{");
+      const lastBrace = raw.lastIndexOf("}");
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        raw = raw.slice(firstBrace, lastBrace + 1);
+      }
+      try {
+        setPrepResult(JSON.parse(raw));
+      } catch {
+        // Try fixing common issues: unescaped quotes, trailing commas, smart quotes
+        const cleaned = raw
+          .replace(/[\u201C\u201D]/g, '"')   // smart quotes to regular
+          .replace(/[\u2018\u2019]/g, "'")   // smart apostrophes
+          .replace(/,\s*([}\]])/g, "$1");    // trailing commas
+        try {
+          setPrepResult(JSON.parse(cleaned));
+        } catch (e) {
+          throw new Error("Couldn't parse the response. Try generating again.");
+        }
+      }
+    } catch (e: unknown) {
+      setPrepErr(e instanceof Error ? `Error: ${e.message}` : "Failed to generate prep plan.");
+      setPrepResult(null);
+    }
     setPrepLoading(false);
   }
 
@@ -546,9 +574,9 @@ Return ONLY valid JSON (no markdown):
           <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.06)", border: `1px solid ${border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>YN</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Your Name</div>
-            <div style={{ fontSize: 11, color: muted }}>{STORIES.length} stories · your name here</div>
+            <div style={{ fontSize: 11, color: muted }}>{STORIES.length} stories · your role here</div>
           </div>
-          <button onClick={() => { setKeyDraft(apiKey); setGroqDraft(groqKey); setShowKeyInput(v => !v); }} title="API Keys" style={{ background: "transparent", border: `1px solid ${apiKey && groqKey ? "rgba(0,229,160,0.4)" : apiKey ? "rgba(241,196,15,0.4)" : border}`, borderRadius: 8, color: apiKey && groqKey ? "#00e5a0" : apiKey ? "#f1c40f" : muted, width: 32, height: 32, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>🔑</button>
+          <button onClick={() => { setKeyDraft(apiKey); setGroqDraft(groqKey); setShowKeyInput(v => !v); }} title="API Keys (optional — set in Vercel for zero-config)" style={{ background: "transparent", border: `1px solid rgba(0,229,160,0.4)`, borderRadius: 8, color: "#00e5a0", width: 32, height: 32, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>🔑</button>
         </div>
         {showKeyInput && (
           <div style={{ background: surface, border: `1px solid ${border}`, borderRadius: 12, padding: "14px", marginBottom: 12 }}>
@@ -654,40 +682,44 @@ Return ONLY valid JSON (no markdown):
       {tab === "practice" && (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}>
           {!started ? (
-            <div style={{ padding: "16px", overflowY: "auto" }}>
-              <div style={{ background: surface, border: `1px solid ${border}`, borderRadius: 12, padding: "14px", marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: coldOpen ? 10 : 0 }}>
-                  <div><div style={{ fontSize: 13, fontWeight: 500 }}>🎯 Cold open mode</div>
-                    <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Random question, no story hint</div></div>
-                  <label className="toggle"><input type="checkbox" checked={coldOpen} onChange={e => setColdOpen(e.target.checked)} /><span className="slider" /></label>
+            <>
+              <div style={{ padding: "16px", overflowY: "auto", flex: 1, minHeight: 0 }}>
+                <div style={{ background: surface, border: `1px solid ${border}`, borderRadius: 12, padding: "14px", marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: coldOpen ? 10 : 0 }}>
+                    <div><div style={{ fontSize: 13, fontWeight: 500 }}>🎯 Cold open mode</div>
+                      <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Random question, no story hint</div></div>
+                    <label className="toggle"><input type="checkbox" checked={coldOpen} onChange={e => setColdOpen(e.target.checked)} /><span className="slider" /></label>
+                  </div>
+                  {coldOpen && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: "1.5", paddingTop: 10, borderTop: `1px solid ${border}` }}>A random question fires. Answer from memory. Story reveal appears after your first response.</div>}
                 </div>
-                {coldOpen && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: "1.5", paddingTop: 10, borderTop: `1px solid ${border}` }}>A random question fires. Answer from memory. Story reveal appears after your first response.</div>}
+                {!coldOpen && (<>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>Interview question</div>
+                    <select value={selQ} onChange={e => { const i = parseInt(e.target.value); setSelQ(i); const q = QA[i]; if (q.lead?.[0]) setSelS(q.lead[0]); }} style={{ width: "100%", background: "#1a1a1a", border: `1px solid ${border}`, borderRadius: 10, color: textColor, fontFamily: "inherit", fontSize: 13, padding: "11px 12px", appearance: "none" }}>
+                      {QA.map((q, i) => <option key={i} value={i}>"{q.q}"</option>)}
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>Story to use</div>
+                    <select value={selS} onChange={e => setSelS(e.target.value)} style={{ width: "100%", background: "#1a1a1a", border: `1px solid ${border}`, borderRadius: 10, color: textColor, fontFamily: "inherit", fontSize: 13, padding: "11px 12px", appearance: "none" }}>
+                      {STORIES.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.title}</option>)}
+                    </select>
+                  </div>
+                </>)}
+                <div style={{ background: surface, borderRadius: 12, padding: "13px 14px", border: `1px solid ${border}` }}>
+                  <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Tips</div>
+                  <div style={{ fontSize: 12, lineHeight: "1.7", color: "rgba(255,255,255,0.5)" }}>• Timer starts when you tap the answer box — target 90–120 sec<br />• Tap <strong style={{ color: "rgba(255,255,255,0.7)" }}>Score ↗</strong> after any answer for structure/specificity/conciseness ratings</div>
+                </div>
               </div>
-              {!coldOpen && (<>
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>Interview question</div>
-                  <select value={selQ} onChange={e => { const i = parseInt(e.target.value); setSelQ(i); const q = QA[i]; if (q.lead?.[0]) setSelS(q.lead[0]); }} style={{ width: "100%", background: "#1a1a1a", border: `1px solid ${border}`, borderRadius: 10, color: textColor, fontFamily: "inherit", fontSize: 13, padding: "11px 12px", appearance: "none" }}>
-                    {QA.map((q, i) => <option key={i} value={i}>"{q.q}"</option>)}
-                  </select>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, color: muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>Story to use</div>
-                  <select value={selS} onChange={e => setSelS(e.target.value)} style={{ width: "100%", background: "#1a1a1a", border: `1px solid ${border}`, borderRadius: 10, color: textColor, fontFamily: "inherit", fontSize: 13, padding: "11px 12px", appearance: "none" }}>
-                    {STORIES.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.title}</option>)}
-                  </select>
-                </div>
-              </>)}
-              <button onClick={startPractice} disabled={loading} style={{ width: "100%", background: loading ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)", border: `1px solid ${loading ? border : "rgba(255,255,255,0.2)"}`, borderRadius: 12, color: loading ? muted : textColor, fontFamily: "inherit", fontSize: 14, fontWeight: 500, padding: "13px", cursor: loading ? "not-allowed" : "pointer" }}>
-                {loading ? "Starting..." : coldOpen ? "Fire random question ↗" : "Start practice session ↗"}
-              </button>
-              <div style={{ marginTop: 16, background: surface, borderRadius: 12, padding: "13px 14px", border: `1px solid ${border}` }}>
-                <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Tips</div>
-                <div style={{ fontSize: 12, lineHeight: "1.7", color: "rgba(255,255,255,0.5)" }}>• Timer starts when you tap the answer box — target 90–120 sec<br />• Tap <strong style={{ color: "rgba(255,255,255,0.7)" }}>Score ↗</strong> after any answer for structure/specificity/conciseness ratings</div>
+              <div style={{ padding: "10px 16px env(safe-area-inset-bottom, 16px)", borderTop: `1px solid ${border}`, background: bg, flexShrink: 0 }}>
+                <button onClick={startPractice} disabled={loading} style={{ width: "100%", background: loading ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)", border: `1px solid ${loading ? border : "rgba(255,255,255,0.2)"}`, borderRadius: 12, color: loading ? muted : textColor, fontFamily: "inherit", fontSize: 14, fontWeight: 500, padding: "13px", cursor: loading ? "not-allowed" : "pointer" }}>
+                  {loading ? "Starting..." : coldOpen ? "Fire random question ↗" : "Start practice session ↗"}
+                </button>
               </div>
-            </div>
+            </>
           ) : (
             <>
-              <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "16px", minHeight: 0 }}>
+              <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "16px", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
                 {coldOpen && coldReveal && (() => { const s = story(coldReveal), q = activeQRef.current; return s ? (
                   <div style={{ background: "rgba(0,229,160,0.06)", border: "1px solid rgba(0,229,160,0.2)", borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
                     <div style={{ fontSize: 10, color: "#00e5a0", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Intended story</div>
@@ -714,27 +746,26 @@ Return ONLY valid JSON (no markdown):
                 )}
               </div>
               <div style={{ padding: "10px 16px env(safe-area-inset-bottom, 16px)", borderTop: `1px solid ${border}`, background: bg, flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: timerOn || micOn || micErr ? 8 : 0, minHeight: timerOn || micOn || micErr ? 24 : 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, minHeight: 24 }}>
                   {timerOn && <TimerBadge sec={talkSec} />}
                   {micOn && <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, background: "rgba(229,57,53,0.1)", border: "1px solid rgba(229,57,53,0.3)" }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#e53935", animation: "pulse 0.8s infinite" }} />
-                    <span style={{ fontSize: 11, color: "#e53935" }}>{transcribing ? "Transcribing..." : "Listening — tap ⏹ to finish"}</span>
+                    <span style={{ fontSize: 11, color: "#e53935" }}>{transcribing ? "Transcribing..." : "Listening"}</span>
                   </div>}
-                  {micErr && <span style={{ fontSize: 11, color: "#e67e22" }}>{micErr}</span>}
+                  {micErr && <span style={{ fontSize: 11, color: "#e67e22", flex: 1 }}>{micErr}</span>}
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => { if (micOn) stopMic(); setMessages([]); setStarted(false); historyRef.current = []; setColdReveal(null); resetTimer(); setTranscribing(false); setMicErr(""); }} style={{ background: "transparent", border: `1px solid ${border}`, borderRadius: 6, color: muted, fontFamily: "inherit", fontSize: 10, padding: "3px 10px", cursor: "pointer" }}>reset</button>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
                   <textarea value={input} onChange={e => setInput(e.target.value)}
                     onFocus={startTimer}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMsg(); } }}
-                    placeholder="Your answer... (timer starts on focus)" rows={3}
-                    style={{ flex: 1, background: surface, border: `1px solid ${timerOn ? (talkSec < 90 ? "rgba(0,229,160,0.3)" : talkSec < 120 ? "rgba(241,196,15,0.3)" : "rgba(231,76,60,0.3)") : border}`, borderRadius: 12, color: textColor, fontFamily: "inherit", fontSize: 16, padding: "10px 12px", lineHeight: "1.5", caretColor: textColor, transition: "border-color .3s" }} />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <button onClick={sendMsg} disabled={loading || !input.trim()} style={{ background: input.trim() && !loading ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.1)", border: "none", borderRadius: 10, color: input.trim() && !loading ? bg : muted, fontFamily: "inherit", fontSize: 13, fontWeight: 600, width: 44, height: 44, cursor: input.trim() && !loading ? "pointer" : "not-allowed" }}>↑</button>
-                    <button onClick={toggleMic} disabled={transcribing} style={{ background: micOn ? "rgba(229,57,53,0.15)" : transcribing ? "rgba(255,255,255,0.03)" : "transparent", border: `1px solid ${micOn ? "rgba(229,57,53,0.5)" : transcribing ? border : border}`, borderRadius: 10, color: micOn ? "#e53935" : transcribing ? muted : muted, fontFamily: "inherit", fontSize: 16, width: 44, height: 44, cursor: transcribing ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {transcribing ? "⏳" : micOn ? "⏹" : "🎤"}
-                    </button>
-                    <button onClick={() => { if (micOn) stopMic(); setMessages([]); setStarted(false); historyRef.current = []; setColdReveal(null); resetTimer(); setTranscribing(false); setMicErr(""); }} style={{ background: "transparent", border: `1px solid ${border}`, borderRadius: 10, color: muted, fontFamily: "inherit", fontSize: 10, width: 44, height: 30, cursor: "pointer" }}>reset</button>
-                  </div>
+                    placeholder="Your answer..." rows={1}
+                    style={{ flex: 1, background: surface, border: `1px solid ${timerOn ? (talkSec < 90 ? "rgba(0,229,160,0.3)" : talkSec < 120 ? "rgba(241,196,15,0.3)" : "rgba(231,76,60,0.3)") : border}`, borderRadius: 12, color: textColor, fontFamily: "inherit", fontSize: 16, padding: "11px 12px", lineHeight: "1.4", caretColor: textColor, transition: "border-color .3s", height: 44, minHeight: 44, maxHeight: 44 }} />
+                  <button onClick={toggleMic} disabled={transcribing} style={{ background: micOn ? "rgba(229,57,53,0.15)" : "transparent", border: `1px solid ${micOn ? "rgba(229,57,53,0.5)" : border}`, borderRadius: 10, color: micOn ? "#e53935" : muted, fontFamily: "inherit", fontSize: 16, width: 44, height: 44, cursor: transcribing ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {transcribing ? "⏳" : micOn ? "⏹" : "🎤"}
+                  </button>
+                  <button onClick={sendMsg} disabled={loading || !input.trim()} style={{ background: input.trim() && !loading ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.1)", border: "none", borderRadius: 10, color: input.trim() && !loading ? bg : muted, fontFamily: "inherit", fontSize: 14, fontWeight: 600, width: 44, height: 44, cursor: input.trim() && !loading ? "pointer" : "not-allowed", flexShrink: 0 }}>↑</button>
                 </div>
               </div>
             </>
@@ -781,6 +812,7 @@ Return ONLY valid JSON (no markdown):
           <button onClick={runCompanyPrep} disabled={prepLoading || !prepCompany.trim()} style={{ width: "100%", background: prepLoading || !prepCompany.trim() ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)", border: `1px solid ${prepLoading || !prepCompany.trim() ? border : "rgba(255,255,255,0.2)"}`, borderRadius: 12, color: prepLoading || !prepCompany.trim() ? muted : textColor, fontFamily: "inherit", fontSize: 14, fontWeight: 500, padding: "13px", cursor: prepLoading || !prepCompany.trim() ? "not-allowed" : "pointer" }}>
             {prepLoading ? "Analyzing..." : "Generate prep plan ↗"}
           </button>
+          {prepErr && <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.25)", borderRadius: 10, fontSize: 12, color: "#e74c3c", lineHeight: "1.5" }}>{prepErr}</div>}
 
           {prepResult && (
             <div style={{ marginTop: 20 }}>
